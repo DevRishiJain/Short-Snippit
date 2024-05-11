@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>User Cards</title>
+  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/all.min.css">
+</head>
+<body>
+  <nav class="navbar">
+    <div class="brand-name">My Brand</div>
+    <div class="nav-buttons">
+      <button class="get-users-btn" onclick="fetchUsers()">Get Users</button>
+      <button class="delete-users-btn" onclick="clearUserCards()">Delete Users</button>
+    </div>
+  </nav>
+  <div class="loader" style="display: none;">Loading...</div>
+  <div class="user-card-grid"></div>
+  <script src="app.js"></script>
+</body>
+</html>
