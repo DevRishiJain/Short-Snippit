@@ -1,107 +1,106 @@
-Certainly! Below are a few original writing samples that could be used for a senior technical writer assessment. Please ensure that you adapt these samples to the specific requirements and context of your assessment.
+To compute the business hour mismatch between Grubhub and UberEats for restaurants, you can follow these steps using SQL. Since the task involves comparing business hours stored as JSON data in BigQuery, a detailed explanation of the query construction is provided:
 
-### Sample 1: API Documentation
+### Step 1: Extract and Flatten JSON Data
 
-#### Overview
-The XYZWeather API allows developers to integrate real-time weather data into their applications. This API provides detailed weather information, including current conditions, forecasts, and historical data.
+First, extract and flatten the JSON data for both UberEats and Grubhub business hours. The JSON data needs to be parsed to access the business hours properly.
 
-#### Base URL
-```
-https://api.xyzweather.com/v1
-```
+For **UberEats** business hours, assuming we need to handle JSON parsing and `unnest` any arrays:
 
-#### Authentication
-All requests to the XYZWeather API require an API key. You can obtain your API key by registering on the XYZWeather developer portal.
+```sql
+-- UberEats: Extract and Flatten Business Hours
+WITH ubereats_hours AS (
+    SELECT 
+        b_name,
+        vb_name,
+        day,
+        start_time,
+        end_time
+    FROM (
+        SELECT 
+            b_name,
+            vb_name,
+            -- Assuming the JSON structure has a regularHours array
+            -- This extracts and flattens the time windows
+            json_column_expression
+            FROM `arboreal-vision-339901.take_home_v2.virtual_kitchen_ubereats_hours`
+    )
+)
 
-#### Endpoint: Get Current Weather
-This endpoint provides current weather information for a specified location.
-
-**URL:**
-```
-GET /current
-```
-
-**Parameters:**
-- **location** (required): The location for which you want to retrieve the weather information. This can be specified as a city name, zip code, or coordinates (latitude and longitude).
-- **units** (optional): The measurement units for the weather data. Options are `imperial` (default) or `metric`.
-
-**Example Request:**
-```http
-GET /current?location=San%20Francisco&units=imperial
-Host: api.xyzweather.com
-Authorization: Bearer YOUR_API_KEY
 ```
 
-**Example Response:**
-```json
-{
-  "location": "San Francisco",
-  "temperature": 65,
-  "units": "Fahrenheit",
-  "humidity": 75,
-  "description": "Partly cloudy"
-}
+For **Grubhub**, follow a similar approach:
+
+```sql
+-- Grubhub: Extract and Flatten Business Hours
+WITH grubhub_hours AS (
+    SELECT 
+        slug,
+        b_name,
+        vb_name,
+        day,
+        start_time,
+        end_time
+    FROM (
+        SELECT 
+            slug,
+            b_name,
+            vb_name,
+            -- Assuming a similar JSON structure to extract the necessary fields
+            json_column_expression
+            FROM `arboreal-vision-339901.take_home_v2.virtual_kitchen_grubhub_hours`
+    )
+)
+```
+### Step 2: Join the Two Tables on Store Identifier
+
+Join UberEats and Grubhub tables based on the store identifier (considering `b_name` and `vb_name` as keys):
+
+```sql
+WITH joined_hours AS (
+    SELECT 
+        ue.b_name,
+        ue.vb_name,
+        ue.day AS ue_day,
+        ue.start_time AS ue_start_time,
+        ue.end_time AS ue_end_time,
+        gh.day AS gh_day,
+        gh.start_time AS gh_start_time,
+        gh.end_time AS gh_end_time
+    FROM ubereats_hours ue
+    LEFT JOIN grubhub_hours gh
+    ON ue.b_name = gh.b_name AND ue.vb_name = gh.vb_name AND ue.day = gh.day
+)
 ```
 
-### Sample 2: User Guide
+### Step 3: Calculate the Business Hours Mismatch
 
-#### Introduction
-Welcome to the User Guide for XYZ Software! This document will help you understand how to install, configure, and effectively use XYZ Software to enhance your productivity.
+Now calculate the mismatch between the UberEats and Grubhub hours:
 
-#### Installation
-1. **Download the Installer**
-   - Visit the [XYZ Software website](https://www.xyzsoftware.com/download) and download the appropriate installer for your operating system.
-   
-2. **Run the Installer**
-   - Follow the on-screen instructions to complete the installation process. Make sure to accept the license agreement and choose the default installation directory unless you have specific requirements.
+```sql
+-- Calculate Business Hours Mismatch
+SELECT 
+    b_name,
+    vb_name,
+    CASE 
+        WHEN gh_start_time IS NULL OR gh_end_time IS NULL 
+            THEN 'Out of Range'
+        WHEN gh_start_time >= DATE_ADD(ue_start_time, INTERVAL -5 MINUTE) 
+             AND gh_end_time <= DATE_ADD(ue_end_time, INTERVAL 5 MINUTE) 
+            THEN 'In Range'
+        WHEN (gh_start_time < DATE_ADD(ue_start_time, INTERVAL -5 MINUTE) 
+             OR gh_end_time > DATE_ADD(ue_end_time, INTERVAL 5 MINUTE)) 
+             AND gh_start_time >= DATE_ADD(ue_start_time, INTERVAL -5 MINUTE)
+             AND gh_end_time <= DATE_ADD(ue_end_time, INTERVAL 5 MINUTE)
+            THEN 'Out of Range with 5 mins difference'
+        ELSE 'Out of Range'
+    END AS is_out_of_range
+FROM joined_hours
+```
 
-3. **Activate Your License**
-   - Once the installation is complete, launch XYZ Software and enter your license key in the activation window. Click "Activate" to complete the process.
+### Explanation:
 
-4. **Check for Updates**
-   - It is recommended to check for updates regularly to ensure that you have the latest features and security patches. Go to `Help > Check for Updates` from the main menu.
+1. **WITH Clause**: Used for breaking down complex queries and making them readable. Here, it flattens JSON data and joins the datasets.
+2. **LEFT JOIN**: Allows identification of when a Grubhub entry does not have a corresponding UberEats hour, which we treat as 'Out of Range'.
+3. **CASE Statement**: Evaluates the conditions to determine if the Grubhub hours fall within the UberEats time range, exactly match (within ±5 minutes), or are simply out of range.
 
-#### Configuration
-1. **Initial Setup Wizard**
-   - The first time you launch XYZ Software, you will be guided through an initial setup wizard. Follow the prompts to configure your preferences.
-
-2. **Customizing Settings**
-   - You can customize various settings by navigating to `Edit > Preferences`. Options include:
-     - **General Settings**: Language, theme, auto-save interval.
-     - **Network Settings**: Proxy configuration, connection timeout.
-     - **Notification Settings**: Email alerts, desktop notifications.
-
-### Sample 3: Technical Proposal
-
-#### Executive Summary
-XYZ Corporation proposes to implement a scalable cloud storage solution to meet the growing data needs of ABC Company. Leveraging industry-leading technologies, this solution aims to enhance data accessibility, security, and cost-efficiency.
-
-#### Project Scope
-The project includes the following key components:
-- **Needs Assessment**: Conduct a detailed analysis of ABC Company's current data storage requirements and future growth projections.
-- **Solution Design**: Develop a cloud storage architecture tailored to address identified needs, incorporating redundancy, scalability, and security measures.
-- **Implementation**: Execute the deployment plan, including data migration, configuration, and testing.
-- **Support and Maintenance**: Provide ongoing support and maintenance services to ensure optimal performance and reliability.
-
-#### Solution Architecture
-The proposed solution utilizes Amazon Web Services (AWS) for its proven reliability and extensive feature set. Key components include:
-- **Amazon S3**: For object storage, providing virtually unlimited scalability and high durability.
-- **Amazon RDS**: For relational database services, ensuring reliable, managed database operations.
-- **AWS IAM**: For robust access management, ensuring secure and controlled access to resources.
-
-#### Timeline
-- **Phase 1**: Needs Assessment and Planning (2 weeks)
-- **Phase 2**: Solution Design (3 weeks)
-- **Phase 3**: Implementation (4 weeks)
-- **Phase 4**: Testing and Validation (2 weeks)
-- **Phase 5**: Go-Live and Support (Ongoing)
-
-#### Budget
-The estimated budget for the proposed solution is $150,000, which includes all hardware, software, and professional services.
-
-### Conclusion
-XYZ Corporation is committed to delivering a high-quality, scalable cloud storage solution that meets the evolving needs of ABC Company. We look forward to the opportunity to collaborate on this important project.
-
----
-
-Feel free to modify these samples according to your specific needs. If you need more tailored content, let me know!  
+By executing the above queries in sequence, you'll achieve the intended objective of computing the business hour mismatch between UberEats and Grubhub for various stores.  
